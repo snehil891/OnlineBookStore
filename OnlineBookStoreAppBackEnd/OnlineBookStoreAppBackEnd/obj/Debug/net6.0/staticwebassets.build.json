@@ -1,0 +1,12 @@
+{
+  "Version": 1,
+  "Hash": "CqqpNsryPI2uigABQgWWQprH/ydv4Bm1lvqxCnhRyGc=",
+  "Source": "OnlineBookStoreAppBackEnd",
+  "BasePath": "_content/OnlineBookStoreAppBackEnd",
+  "Mode": "Default",
+  "ManifestType": "Build",
+  "ReferencedProjectsConfiguration": [],
+  "DiscoveryPatterns": [],
+  "Assets": [],
+  "Endpoints": []
+}
