@@ -1,5 +1,11 @@
+using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.IdentityModel.Tokens;
+using NuGet.Protocol.Plugins;
 using OnlineBookStoreAppBackEnd.Data;
+using OnlineBookStoreAppBackEnd.Services;
+using System.Text;
 
 namespace OnlineBookStoreAppBackEnd
 {
@@ -8,6 +14,41 @@ namespace OnlineBookStoreAppBackEnd
         public static void Main(string[] args)
         {
             var builder = WebApplication.CreateBuilder(args);
+
+            var MyAllowSpecificOrigins = "_myAllowSpecificOrigins";
+
+            builder.Services.AddCors(options =>
+            {
+                options.AddPolicy(name: MyAllowSpecificOrigins,
+                    policy =>
+                    {
+                        policy.WithOrigins("http://localhost:3000")
+                              .AllowAnyHeader()
+                              .AllowAnyMethod()
+                              .AllowCredentials();
+                    });
+            });
+            builder.Services.AddScoped<AuthService>();
+            var jwtSettings = builder.Configuration.GetSection("Jwt");
+            var key = Encoding.UTF8.GetBytes(jwtSettings["Key"].ToString());
+
+            builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
+                .AddJwtBearer(options =>
+                {
+                    options.TokenValidationParameters = new TokenValidationParameters
+                    {
+                        ValidateIssuer = true,
+                        ValidateAudience = true,
+                        ValidateLifetime = true,
+                        ValidateIssuerSigningKey = true,
+                        ValidIssuer = jwtSettings["Issuer"].ToString(),
+                        ValidAudience = jwtSettings["Audience"].ToString(),
+                        IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(builder.Configuration["Jwt:Key"])),
+                        ClockSkew = TimeSpan.Zero
+                    };
+                });
+            //Enforce Authorization Globally(Require Login for All APIs)
+            builder.Services.AddAuthorization();
 
             //Adding Database Connection
             builder.Services.AddDbContext<ApplicationDbContext>(options =>
@@ -23,6 +64,7 @@ namespace OnlineBookStoreAppBackEnd
 
             var app = builder.Build();
 
+            app.UseCors(MyAllowSpecificOrigins);
             // Configure the HTTP request pipeline.
             if (app.Environment.IsDevelopment())
             {
@@ -30,8 +72,8 @@ namespace OnlineBookStoreAppBackEnd
                 app.UseSwaggerUI();
             }
 
+            app.UseAuthentication();
             app.UseAuthorization();
-
 
             app.MapControllers();
 

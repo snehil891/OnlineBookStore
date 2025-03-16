@@ -13,6 +13,10 @@ namespace OnlineBookStoreAppBackEnd.Models
         public string? PhoneNumber { get; set; }
         [Required]
         public string? UserPassword { get; set; }
+        [Required]
+        public string? SecurityQuestion { get; set; }
+        [Required]
+        public string? SecurityAnswer { get; set; }
         [Required, RegularExpression("^(Customer|Admin)$")]
         public string? Role { get; set; } = "Customer";
     }
