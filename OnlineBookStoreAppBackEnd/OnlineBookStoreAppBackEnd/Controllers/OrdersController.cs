@@ -23,60 +23,71 @@ namespace OnlineBookStoreAppBackEnd.Controllers
             _context = context;
         }
 
-        // GET: api/Orders (Admin can view all orders)
+        // Get all orders (Admin Only)
         [Authorize(Roles = "Admin")]
         [HttpGet]
-        public async Task<ActionResult<IEnumerable<Order>>> GetOrders()
+        public async Task<ActionResult<IEnumerable<Order>>> GetAllOrders()
         {
-          return await _context.Orders.Include(o=>o.OrderItems).ThenInclude(oi=>oi.Book).ToListAsync();
+            var orders =  await _context.Orders
+                .Include(o => o.OrderItems)
+                .ThenInclude(oi => oi.Book)
+                .ToListAsync();
+            return Ok(orders);
         }
 
-        // GET: api/Orders/user/{userId} (User can view their orders)
-        [Authorize(Roles="Customer")]
+        // Get user-specific orders (Customer Only)
+        [Authorize(Roles = "Customer")]
         [HttpGet("user/{userId}")]
         public async Task<ActionResult<IEnumerable<Order>>> GetUserOrder(int userId)
         {
-          return await _context.Orders
+            return await _context.Orders
                 .Include(o => o.OrderItems)
                 .ThenInclude(oi => oi.Book)
                 .Where(o => o.UserId == userId)
                 .ToListAsync();
         }
 
-        // PUT: api/Orders/{orderId} (Admin can update order status)
-        // To protect from overposting attacks, see https://go.microsoft.com/fwlink/?linkid=2123754
+        // Admin can update order status
         [Authorize(Roles = "Admin")]
-        [HttpPut("{orderId}")]
-        public async Task<IActionResult> UpdateOrderStatus(int orderId, [FromBody] string status)
+        [HttpPut("update-status/{orderId}")]
+        public async Task<IActionResult> UpdateOrderStatus(int orderId, [FromBody] OrderUpdateRequest orderRequest)
         {
             var order = await _context.Orders.FindAsync(orderId);
             if (order == null)
             {
-                return NotFound();
+                return NotFound("Order not found.");
             }
-            order.Status = status;
+
+            order.Status = orderRequest.status;
+            order.ExpectedDeliveryDate = orderRequest.ExpectedDeliveryDate;
             await _context.SaveChangesAsync();
-            return NoContent();
+            return Ok();
         }
 
-        // POST: api/Orders
-        // To protect from overposting attacks, see https://go.microsoft.com/fwlink/?linkid=2123754
+        // Place an Order
         [HttpPost]
-        public async Task<IActionResult> PlaceOrder([FromBody] OrderRequest orderRequest)
+        public async Task<IActionResult> PlaceOrder([FromBody] OrderDto orderRequest)
         {
             if (orderRequest == null || orderRequest.OrderItems == null || !orderRequest.OrderItems.Any())
                 return BadRequest("Invalid order request.");
 
-            // Create a new Order
+            // Check if user exists
+            var user = await _context.Users.FindAsync(orderRequest.UserId);
+            if (user == null)
+                return NotFound("User not found.");
+
+            // Create new Order with shipping address
             var order = new Order
             {
                 UserId = orderRequest.UserId,
+                ShippingAddress = orderRequest.ShippingAddress, // ✅ Store Address
                 OrderDate = DateTime.UtcNow,
                 Status = "Pending",
-                OrderItems = new List<OrderItem>()
+                OrderItems = new List<OrderItem>(),
+                TotalAmount = orderRequest.OrderItems.Sum(i=> i.Price * i.Quantity)
             };
 
-            // Add each ordered book to OrderItems
+            // Add order items
             foreach (var item in orderRequest.OrderItems)
             {
                 var book = await _context.Books.FindAsync(item.BookId);
@@ -91,37 +102,33 @@ namespace OnlineBookStoreAppBackEnd.Controllers
                 });
             }
 
-            // Save order to database
             _context.Orders.Add(order);
             await _context.SaveChangesAsync();
 
             return Ok(new { message = "Order placed successfully", orderId = order.OrderId });
         }
 
-
-        // DELETE: api/Orders/5
-        [HttpDelete("{id}")]
-        public async Task<IActionResult> DeleteOrder(int id)
+        // Delete Order (Admin Only)
+        [Authorize(Roles = "Admin")]
+        [HttpDelete("delete/{orderId}")]
+        public async Task<IActionResult> DeleteOrder(int orderId)
         {
-            if (_context.Orders == null)
-            {
-                return NotFound();
-            }
-            var order = await _context.Orders.FindAsync(id);
+            var order = await _context.Orders.Include(o=>o.OrderItems).FirstOrDefaultAsync(o=>o.OrderId == orderId);
             if (order == null)
             {
-                return NotFound();
+                return NotFound("Order not found");
             }
 
+            _context.OrderItems.RemoveRange(order.OrderItems);
             _context.Orders.Remove(order);
             await _context.SaveChangesAsync();
 
-            return NoContent();
+            return Ok(new {message = "Order deleted successfully"});
         }
-
-        private bool OrderExists(int id)
-        {
-            return (_context.Orders?.Any(e => e.OrderId == id)).GetValueOrDefault();
-        }
+    }
+    public class OrderUpdateRequest
+    {
+        public string? status { get; set; }
+        public DateTime? ExpectedDeliveryDate { get; set; }
     }
 }

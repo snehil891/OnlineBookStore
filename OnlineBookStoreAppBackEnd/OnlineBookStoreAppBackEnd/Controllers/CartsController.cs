@@ -1,9 +1,5 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Threading.Tasks;
+﻿using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
-using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using OnlineBookStoreAppBackEnd.Data;
@@ -23,104 +19,53 @@ namespace OnlineBookStoreAppBackEnd.Controllers
             _context = context;
         }
 
-        // GET: api/Carts
-        [HttpGet]
-        public async Task<ActionResult<IEnumerable<Cart>>> GetCart()
+        // Get cart for logged-in user
+        [HttpGet("user")]
+        public async Task<ActionResult<Cart>> GetUserCart()
         {
-          if (_context.Cart == null)
-          {
-              return NotFound();
-          }
-            return await _context.Cart.ToListAsync();
-        }
-
-        // GET: api/Carts/5
-        [HttpGet("{id}")]
-        public async Task<ActionResult<Cart>> GetCart(int id)
-        {
-          if (_context.Cart == null)
-          {
-              return NotFound();
-          }
-            var cart = await _context.Cart.FindAsync(id);
-
-            if (cart == null)
-            {
-                return NotFound();
-            }
-
-            return cart;
-        }
-
-        // PUT: api/Carts/5
-        // To protect from overposting attacks, see https://go.microsoft.com/fwlink/?linkid=2123754
-        [HttpPut("{id}")]
-        public async Task<IActionResult> PutCart(int id, Cart cart)
-        {
-            if (id != cart.Id)
-            {
-                return BadRequest();
-            }
-
-            _context.Entry(cart).State = EntityState.Modified;
-
             try
             {
-                await _context.SaveChangesAsync();
-            }
-            catch (DbUpdateConcurrencyException)
-            {
-                if (!CartExists(id))
+                // Log all claims for debugging
+                var claims = User.Claims.Select(c => new { c.Type, c.Value }).ToList();
+                Console.WriteLine($"Token Claims: {System.Text.Json.JsonSerializer.Serialize(claims)}");
+
+                // Try extracting the user ID
+                var userIdClaim = User.FindFirst("id") ?? User.FindFirst(ClaimTypes.NameIdentifier);
+                if (userIdClaim == null || !int.TryParse(userIdClaim.Value, out int userId))
                 {
-                    return NotFound();
+                    return Unauthorized("User ID not found in token.");
                 }
-                else
+
+                var cart = await _context.Cart
+                    .Include(c => c.CartItems)
+                    .ThenInclude(ci => ci.Book)
+                    .FirstOrDefaultAsync(c => c.UserId == userId);
+
+                return Ok(new
                 {
-                    throw;
-                }
+                    CartId = cart.CartId,
+                    UserId = cart.UserId,
+                    CartItems = cart.CartItems.Select(ci => new
+                    {
+                        CartItemId = ci.CartItemId,
+                        BookId = ci.BookId,
+                        Quantity = ci.Quantity,
+                        Book = new
+                        {
+                            ci.Book.BookId,
+                            ci.Book.Title,
+                            ci.Book.Author,
+                            ci.Book.Price,
+                            ci.Book.CoverImageUrl
+                        }
+                    })
+                });
+
             }
-
-            return NoContent();
-        }
-
-        // POST: api/Carts
-        // To protect from overposting attacks, see https://go.microsoft.com/fwlink/?linkid=2123754
-        [HttpPost]
-        public async Task<ActionResult<Cart>> PostCart(Cart cart)
-        {
-          if (_context.Cart == null)
-          {
-              return Problem("Entity set 'ApplicationDbContext.Cart'  is null.");
-          }
-            _context.Cart.Add(cart);
-            await _context.SaveChangesAsync();
-
-            return CreatedAtAction("GetCart", new { id = cart.Id }, cart);
-        }
-
-        // DELETE: api/Carts/5
-        [HttpDelete("{id}")]
-        public async Task<IActionResult> DeleteCart(int id)
-        {
-            if (_context.Cart == null)
+            catch (Exception ex)
             {
-                return NotFound();
+                return StatusCode(500, $"Internal Server Error: {ex.Message}");
             }
-            var cart = await _context.Cart.FindAsync(id);
-            if (cart == null)
-            {
-                return NotFound();
-            }
-
-            _context.Cart.Remove(cart);
-            await _context.SaveChangesAsync();
-
-            return NoContent();
-        }
-
-        private bool CartExists(int id)
-        {
-            return (_context.Cart?.Any(e => e.Id == id)).GetValueOrDefault();
         }
     }
 }
