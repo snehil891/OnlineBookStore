@@ -1,9 +1,9 @@
-# Ignore Visual Studio files
+
 .vs/
 *.user
 *.suo
 *.userosscache
-*.sln.docstates
+*.sln.docstate
 
 # Ignore build outputs
 bin/
@@ -15,3 +15,4 @@ packages/
 
 # Ignore local settings
 appsettings.Development.json
+=======
