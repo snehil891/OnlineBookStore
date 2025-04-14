@@ -5,14 +5,14 @@ COPY onlinebookstorefrontend/ .
 RUN npm install && npm run build
 
 # --- Step 2: Build .NET backend ---
-FROM mcr.microsoft.com/dotnet/sdk:7.0 AS backend-build
+FROM mcr.microsoft.com/dotnet/sdk:6.0 AS backend-build
 WORKDIR /src
 COPY OnlineBookStoreAppBackEnd/ .
 RUN dotnet restore
 RUN dotnet publish -c Release -o /app/publish
 
 # --- Step 3: Final image with runtime only ---
-FROM mcr.microsoft.com/dotnet/aspnet:7.0
+FROM mcr.microsoft.com/dotnet/aspnet:6.0
 WORKDIR /app
 
 # Copy backend build
